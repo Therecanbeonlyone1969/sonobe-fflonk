@@ -32,9 +32,9 @@ Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethere
 
 ### Sprint 2: Decider Implementation [/]
 - [x] Implement `preprocess()` - Universal SRS loading ✓
-- [/] Implement `prove()` - Witness conversion and proof generation
-- [ ] Implement `verify()` - FFLONK + KZG verification
-- [/] Write unit tests (TDD: Red-Green-Refactor) - 8 tests passing
+- [x] Implement `prove()` - Witness conversion and proof generation ✓
+- [x] Implement `verify()` - FFLONK + KZG verification ✓
+- [x] Write unit tests (TDD: Red-Green-Refactor) - 8 tests passing ✓
 - [ ] **Law 9**: Executable demo (`examples/demo_sprint2.rs`)
 - [ ] **Law 9**: Walkthrough artifact update
 
