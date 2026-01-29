@@ -25,6 +25,26 @@ Implement `DeciderFflonk` as an alternative to the Groth16-based `Decider` in So
 - **FFLONK Crate**: `w3f/fflonk` — Rationale: arkworks-native, reference implementation
 - **Project Mode**: Prod-Oriented PoC — Rationale: Crypto security critical, but velocity acceptable
 - **API Strategy**: Mirror existing `Decider<Groth16>` API for drop-in compatibility
+- **PCS Integration**: Adapter pattern (see Section 5.3)
+
+### 1.4 PCS Integration Strategy Analysis
+
+| Approach | Description | Pros | Cons |
+|----------|-------------|------|------|
+| **A: PCS Adapter** | Wrap Sonobe's KZG to implement fflonk's `PCS` trait | Clean separation, no fork needed | Runtime overhead, type conversion |
+| **B: Direct Integration** | Use w3f/fflonk's built-in KZG directly | Zero overhead, native API | Duplicate KZG logic, SRS incompatibility |
+| **C: Fork w3f/fflonk** | Fork and modify to use Sonobe's KZG | Full control, optimize for Sonobe | Maintenance burden, upstream divergence |
+| **D: Shplonk-only** | Extract just the Shplonk aggregation layer | Minimal integration surface | More implementation work |
+
+**Decision**: **Option A (PCS Adapter)** with contingency fallback to **Option C**
+
+**Rationale**:
+1. **Low risk**: Adapter pattern isolates integration complexity at a clean boundary
+2. **No upstream fork**: Can track w3f/fflonk updates and security patches easily
+3. **Testable in isolation**: Can verify adapter correctness with unit tests before full integration
+4. **Performance measurement**: If benchmarks show adapter overhead >10% proving time, fallback to Option C
+
+**Contingency Trigger**: If Sprint 1 benchmarks show >10% overhead in polynomial commitment operations, switch to Option C (fork).
 
 ---
 
@@ -518,7 +538,14 @@ cd folding-schemes
 cargo test decider_fflonk --release
 ```
 
-**Expected**: All tests pass
+**Expected**: All tests pass, **coverage ≥ 90%**
+
+**Coverage Command**:
+```bash
+cargo tarpaulin --out Html --packages folding-schemes --release -- decider_fflonk
+# Open target/tarpaulin/tarpaulin-report.html
+# Verify: Line coverage >= 90%, Branch coverage >= 85%
+```
 
 **Test Cases**:
 | Test Name | Description | Expected Result |
@@ -541,6 +568,98 @@ cargo test --test integration_fflonk --release
 | Test | Description | Expected |
 |------|-------------|----------|
 | `test_fflonk_with_nova_ivc` | Full Nova → FFLONK flow | Proof verifies |
+
+### 9.3 Edge Case Testing Matrix (90%+ Coverage)
+
+> **CRITICAL**: As an advanced crypto project, every edge case must have explicit test coverage.
+
+#### 9.3.1 `preprocess()` Edge Cases
+
+| ID | Edge Case | Input | Expected | Test Name |
+|----|-----------|-------|----------|-----------|
+| PP-01 | Minimum circuit size | state_len = 1 | Success | `test_preprocess_min_state` |
+| PP-02 | Maximum circuit size | state_len = 1000 | Success (may OOM) | `test_preprocess_large_state` |
+| PP-03 | Zero state length | state_len = 0 | `Err(InvalidStateLen)` | `test_preprocess_zero_state` |
+| PP-04 | Invalid R1CS | Malformed r1cs | `Err(InvalidR1CS)` | `test_preprocess_invalid_r1cs` |
+| PP-05 | Mismatched curves | Wrong C2 type | Compile error | N/A (type system) |
+| PP-06 | Empty CycleFold | cf_r1cs = None | `Err(MissingCycleFold)` | `test_preprocess_no_cyclefold` |
+| PP-07 | RNG exhaustion | Deterministic seed | Panic or Error | `test_preprocess_rng_edge` |
+
+#### 9.3.2 `prove()` Edge Cases
+
+| ID | Edge Case | Input | Expected | Test Name |
+|----|-----------|-------|----------|-----------|
+| PR-01 | Valid Nova state | Normal IVC output | Valid proof | `test_prove_valid` |
+| PR-02 | Nova with i=1 | Minimal folding | Valid proof | `test_prove_single_step` |
+| PR-03 | Nova with i=1000 | Many steps | Valid proof | `test_prove_many_steps` |
+| PR-04 | Mismatched PK | Wrong circuit's pk | `Err(CircuitMismatch)` | `test_prove_wrong_pk` |
+| PR-05 | Null witness | Missing W_i | `Err(InvalidWitness)` | `test_prove_null_witness` |
+| PR-06 | Zero randomness | r = 0 | Valid proof (edge) | `test_prove_zero_r` |
+| PR-07 | Max field element | r = p-1 | Valid proof | `test_prove_max_r` |
+| PR-08 | Concurrent proving | Parallel calls | Thread-safe | `test_prove_parallel` |
+
+#### 9.3.3 `verify()` Edge Cases
+
+| ID | Edge Case | Input | Expected | Test Name |
+|----|-----------|-------|----------|-----------|
+| VF-01 | Valid proof | Correct proof | `Ok(true)` | `test_verify_valid` |
+| VF-02 | Tampered fflonk_proof | Flip bit in proof | `Err(FflonkVerificationFail)` | `test_verify_tampered_proof` |
+| VF-03 | Tampered kzg_proofs | Flip bit in KZG | `Err(KZGVerificationFail)` | `test_verify_tampered_kzg` |
+| VF-04 | Wrong pp_hash | Different circuit | `Err(PPHashMismatch)` | `test_verify_wrong_pphash` |
+| VF-05 | Wrong z_0 | Modified initial state | `Err(...)` | `test_verify_wrong_z0` |
+| VF-06 | Wrong z_i | Modified final state | `Err(...)` | `test_verify_wrong_zi` |
+| VF-07 | Wrong i value | i != actual steps | `Err(...)` | `test_verify_wrong_i` |
+| VF-08 | i = 0 | Zero steps | `Err(NotEnoughSteps)` | `test_verify_zero_steps` |
+| VF-09 | i = 1 | Single step | `Err(NotEnoughSteps)` | `test_verify_single_step` |
+| VF-10 | Swapped commitments | U_i <-> u_i | `Err(...)` | `test_verify_swapped_commits` |
+| VF-11 | Empty commitments | Vec::new() | `Err(EmptyCommitments)` | `test_verify_empty_commits` |
+| VF-12 | Replay attack | Same proof twice | `Ok(true)` both (stateless) | `test_verify_replay` |
+
+#### 9.3.4 Serialization Edge Cases
+
+| ID | Edge Case | Input | Expected | Test Name |
+|----|-----------|-------|----------|-----------|
+| SR-01 | Roundtrip FflonkProof | Serialize + deserialize | Equal | `test_proof_serialization` |
+| SR-02 | Roundtrip VerifierParam | Serialize + deserialize | Equal | `test_vp_serialization` |
+| SR-03 | Truncated bytes | Partial proof bytes | `Err(DeserializeError)` | `test_truncated_proof` |
+| SR-04 | Random bytes | 1000 random bytes | `Err(DeserializeError)` | `test_random_bytes_deser` |
+| SR-05 | Empty bytes | Vec::new() | `Err(DeserializeError)` | `test_empty_deser` |
+| SR-06 | Max size proof | Largest valid proof | Success | `test_max_size_proof` |
+
+#### 9.3.5 Field Element Boundary Cases
+
+| ID | Edge Case | Value | Expected | Test Name |
+|----|-----------|-------|----------|-----------|
+| FE-01 | Zero field element | Fr::zero() | Valid | `test_field_zero` |
+| FE-02 | One field element | Fr::one() | Valid | `test_field_one` |
+| FE-03 | Max field element | p - 1 | Valid | `test_field_max` |
+| FE-04 | Generator | Fr::GENERATOR | Valid | `test_field_generator` |
+| FE-05 | Random elements | 1000 random | All valid | `test_field_random` |
+
+#### 9.3.6 Fuzz Testing
+
+| Target | Duration | Command |
+|--------|----------|----------|
+| `prove()` inputs | 1 hour | `cargo fuzz run fuzz_prove -- -max_total_time=3600` |
+| `verify()` inputs | 1 hour | `cargo fuzz run fuzz_verify -- -max_total_time=3600` |
+| Proof deserialization | 30 min | `cargo fuzz run fuzz_deser -- -max_total_time=1800` |
+
+**Fuzz Targets** (in `fuzz/fuzz_targets/`):
+```rust
+// fuzz_verify.rs
+#![no_main]
+use libfuzzer_sys::fuzz_target;
+use folding_schemes::folding::nova::decider_fflonk_eth::*;
+
+fuzz_target!(|data: &[u8]| {
+    // Attempt to deserialize and verify arbitrary bytes
+    if let Ok(proof) = FflonkProof::try_from_bytes(data) {
+        let _ = DeciderFflonk::verify(DUMMY_VP, Fr::one(), vec![], vec![], &[], &[], &proof);
+    }
+});
+```
+
+### 9.4 Memory Benchmarks
 | `test_fflonk_serialization` | Serialize/deserialize all params | Round-trip success |
 
 ### 9.3 Memory Benchmarks
