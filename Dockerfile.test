@@ -34,5 +34,5 @@ COPY . .
 # Build library to verify compilation
 RUN cargo build -p folding-schemes --release
 
-# Run fflonk tests
-CMD ["cargo", "test", "-p", "folding-schemes", "--release", "--", "decider_fflonk", "--nocapture"]
+# Run fflonk tests and demo
+CMD ["sh", "-c", "cargo test -p folding-schemes --release -- decider_fflonk --nocapture && echo '--- Running Sprint 1 Demo ---' && cargo run -p folding-schemes --release --example demo_sprint1"]
