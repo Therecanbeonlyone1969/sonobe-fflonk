@@ -6,23 +6,16 @@
 /// - Slightly larger proofs but still constant-size
 ///
 /// Based on the paper: https://eprint.iacr.org/2021/1167
+
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{
-    rand::{CryptoRng, RngCore},
-    One, Zero,
-};
+use ark_std::rand::{CryptoRng, RngCore};
 use core::marker::PhantomData;
 
 pub use super::decider_eth_circuit::DeciderEthCircuit;
-use super::decider_eth_circuit::DeciderNovaGadget;
 use super::Nova;
-use crate::folding::circuits::decider::DeciderEnabledNIFS;
-use crate::folding::traits::{InputizeNonNative, WitnessOps};
+use crate::commitment::{kzg::Proof as KZGProof, pedersen::Params as PedersenParams, CommitmentScheme};
+use crate::folding::traits::Dummy;
 use crate::frontend::FCircuit;
-use crate::{
-    commitment::{kzg::Proof as KZGProof, pedersen::Params as PedersenParams, CommitmentScheme},
-    folding::traits::Dummy,
-};
 use crate::{Curve, Error};
 use crate::{Decider as DeciderTrait, FoldingScheme};
 
@@ -166,23 +159,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    // Note: Full KZG integration tests are blocked by pprof/nix Windows incompatibility
-    // in dev-dependencies. The w3f-pcs crate is verified to work via its own test suite.
-    // 
-    // Sprint 1 verification:
-    // 1. ✅ fflonk dependency added (Therecanbeonlyone1969/fflonk fork)
-    // 2. ✅ arkworks compatibility verified (patched Cargo.toml)
-    // 3. ✅ Library compiles with w3f-pcs
-    // 
-    // Full integration tests will be added in Sprint 2 when implementing prove/verify.
+    // Note: These tests require Linux due to pprof/nix dev-dependencies.
+    // Run via Docker: `docker build -f Dockerfile.test -t sonobe-fflonk-test . && docker run --rm sonobe-fflonk-test`
 
     use super::*;
+    use ark_bn254::Bn254;
+    use ark_poly::{DenseUVPolynomial, Polynomial};
+    use ark_std::test_rng;
+    use w3f_pcs::pcs::{PcsParams, PCS};
+    use w3f_pcs::pcs::kzg::KZG;
+    use w3f_pcs::Poly;
 
     /// Verify the module compiles and types are accessible
     #[test]
     fn test_fflonk_types_exist() {
-        // This test verifies that the FFLONK types compile correctly
-        // The actual implementation will be in Sprint 2
         fn _assert_send<T: Send>() {}
         fn _assert_sync<T: Sync>() {}
         
@@ -195,6 +185,66 @@ mod tests {
             (),
             (),
         >>();
+    }
+
+    /// Test that w3f-pcs KZG is properly integrated with arkworks
+    /// This validates Sprint 1 goal: "Verify arkworks compatibility"
+    #[test]
+    fn test_w3f_pcs_kzg_integration() {
+        let rng = &mut test_rng();
+        let max_degree = 15;
+
+        // Setup KZG params
+        let urs = KZG::<Bn254>::setup(max_degree, rng);
+        let ck = urs.ck();
+        let vk = urs.vk();
+
+        // Create a test polynomial
+        let poly = Poly::rand(max_degree, rng);
+        let x = ark_bn254::Fr::from(42u64);
+        let y = poly.evaluate(&x);
+
+        // Commit to polynomial
+        let commitment = KZG::<Bn254>::commit(&ck, &poly).expect("Commit failed");
+
+        // Open at point x
+        let proof = KZG::<Bn254>::open(&ck, &poly, x).expect("Open failed");
+
+        // Verify opening
+        let result = KZG::<Bn254>::verify(&vk, commitment, x, y, proof);
+        assert!(result.is_ok(), "KZG verification failed");
+    }
+
+    /// Test that KZG batch verification works
+    #[test]
+    fn test_w3f_pcs_kzg_batch() {
+        let rng = &mut test_rng();
+        let max_degree = 15;
+
+        let urs = KZG::<Bn254>::setup(max_degree, rng);
+        let ck = urs.ck();
+        let vk = urs.vk();
+
+        // Create multiple polynomials and openings
+        let mut commitments = Vec::new();
+        let mut xs = Vec::new();
+        let mut ys = Vec::new();
+        let mut proofs = Vec::new();
+
+        for i in 0..3 {
+            let poly = Poly::rand(max_degree, rng);
+            let x = ark_bn254::Fr::from((i + 1) as u64);
+            let y = poly.evaluate(&x);
+
+            commitments.push(KZG::<Bn254>::commit(&ck, &poly).unwrap());
+            xs.push(x);
+            ys.push(y);
+            proofs.push(KZG::<Bn254>::open(&ck, &poly, x).unwrap());
+        }
+
+        // Batch verify
+        let result = KZG::<Bn254>::batch_verify(&vk, commitments, xs, ys, proofs, rng);
+        assert!(result.is_ok(), "KZG batch verification failed");
     }
 }
 

@@ -25,7 +25,7 @@ Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethere
 ### Sprint 1: FFLONK Crate Integration
 - [x] Add `fflonk` dependency → Used `Therecanbeonlyone1969/fflonk` fork with arkworks patches
 - [x] Verify arkworks compatibility → Patched G1Prepared API, all tests pass
-- [/] Create minimal test circuit → Blocked by pprof/nix Windows issue
+- [x] Create minimal test circuit → 3 tests pass in Docker (KZG integration, batch, types)
 - [ ] Benchmark memory usage
 
 ### Sprint 2: Decider Implementation

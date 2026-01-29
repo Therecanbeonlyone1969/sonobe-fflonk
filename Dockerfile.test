@@ -1,0 +1,38 @@
+# Dockerfile for running sonobe-fflonk tests on Linux
+# Avoids Windows pprof/nix incompatibility issues
+
+FROM rust:1.75-bookworm
+
+# Install system dependencies for arkworks (optional: for faster builds)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+COPY folding-schemes/Cargo.toml folding-schemes/
+COPY solidity-verifiers/Cargo.toml solidity-verifiers/
+COPY cli/Cargo.toml cli/
+COPY experimental-frontends/Cargo.toml experimental-frontends/
+
+# Create dummy source files for dependency compilation
+RUN mkdir -p folding-schemes/src && echo "fn main() {}" > folding-schemes/src/lib.rs
+RUN mkdir -p solidity-verifiers/src && echo "fn main() {}" > solidity-verifiers/src/lib.rs
+RUN mkdir -p cli/src && echo "fn main() {}" > cli/src/main.rs
+RUN mkdir -p experimental-frontends/src && echo "fn main() {}" > experimental-frontends/src/lib.rs
+
+# Pre-fetch dependencies (cached layer)
+RUN cargo fetch || true
+
+# Copy full source
+COPY . .
+
+# Build library to verify compilation
+RUN cargo build -p folding-schemes --release
+
+# Run fflonk tests
+CMD ["cargo", "test", "-p", "folding-schemes", "--release", "--", "decider_fflonk", "--nocapture"]
