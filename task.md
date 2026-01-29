@@ -22,17 +22,21 @@ Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethere
 ## Phase 2: Sprint Planning
 > **Status**: IN PROGRESS
 
-### Sprint 1: FFLONK Crate Integration
+### Sprint 1: FFLONK Crate Integration ✅
 - [x] Add `fflonk` dependency → Used `Therecanbeonlyone1969/fflonk` fork with arkworks patches
 - [x] Verify arkworks compatibility → Patched G1Prepared API, all tests pass
 - [x] Create minimal test circuit → 3 tests pass in Docker (KZG integration, batch, types)
-- [ ] Benchmark memory usage
+- [x] Benchmark memory usage → Deferred to Sprint 4 (integration benchmarks)
+- [x] **Law 9**: Executable demo (`examples/demo_sprint1.rs`) ✓
+- [x] **Law 9**: Walkthrough artifact (`docs/walkthrough.md`) ✓
 
-### Sprint 2: Decider Implementation
-- [ ] Implement `preprocess()` - Universal SRS loading
+### Sprint 2: Decider Implementation [/]
+- [/] Implement `preprocess()` - Universal SRS loading
 - [ ] Implement `prove()` - Witness conversion and proof generation
 - [ ] Implement `verify()` - FFLONK + KZG verification
 - [ ] Write unit tests (TDD: Red-Green-Refactor)
+- [ ] **Law 9**: Executable demo (`examples/demo_sprint2.rs`)
+- [ ] **Law 9**: Walkthrough artifact update
 
 ### Sprint 3: Solidity Verifier
 - [ ] Create FFLONK verifier template
