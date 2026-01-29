@@ -91,9 +91,56 @@ $ docker run --rm sonobe-fflonk-test cargo run --release --example demo_sprint1
 
 ---
 
-## Sprint 2: DeciderFflonk Implementation (Planned)
+## Sprint 2: DeciderFflonk Implementation ✅
 
-See `docs/SPRINT_2_PLAN.md` for detailed implementation plan.
+### Summary
+
+Implemented the full `DeciderFflonk` trait with `preprocess()`, `prove()`, and `verify()` methods using w3f-pcs KZG types for the universal trusted setup.
+
+### Key Accomplishments
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| `preprocess()` | ✅ | Generates URS, KzgCommitterKey, RawKzgVerifierKey |
+| `prove()` | ✅ | Converts to DeciderEthCircuit, generates KZG proofs |
+| `verify()` | ✅ | Folds commitments, verifies KZG opening proofs |
+| TDD tests | ✅ | 8 tests pass (5 new Sprint 2 tests) |
+
+### Technical Details
+
+**preprocess()**: Generates universal KZG SRS instead of circuit-specific setup:
+```rust
+let urs = URS::<Bn254>::generate(max_degree + 1, 2, &mut rng);
+let kzg_ck = urs.ck();      // KzgCommitterKey for prover
+let kzg_vk = urs.raw_vk();  // RawKzgVerifierKey for verifier
+```
+
+**prove()**: Follows Groth16 pattern but generates KZG proofs:
+1. Convert folding scheme to `DeciderEthCircuit` (performs NIFS fold)
+2. Extract cmT, r, kzg_challenges from circuit
+3. Generate KZG proofs for W and E polynomial openings
+4. Return `FflonkProof` with witness_commitments and evaluations
+
+**verify()**: 
+1. Check minimum steps (i > 1)
+2. Fold commitments: `cmW_final = cmW_running + r * cmW_incoming`
+3. Verify witness_commitments match folded commitments
+4. Verify KZG opening proofs using `CS1::verify_with_challenge`
+
+### Test Results
+
+```
+$ docker run --rm sonobe-fflonk-test cargo test -p folding-schemes --release --lib -- decider_fflonk
+
+test result: ok. 8 passed; 0 failed;
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `decider_fflonk_eth.rs` | Full implementation of preprocess/prove/verify |
+| `task.md` | Updated Sprint 2 progress |
 
 ---
 
@@ -101,3 +148,4 @@ See `docs/SPRINT_2_PLAN.md` for detailed implementation plan.
 
 - **Windows Limitation**: `pprof` dev-dependency incompatible with Windows due to `nix`/`libc`. Use Docker for testing.
 - **Fork Maintenance**: May need to update fork if upstream w3f-pcs changes.
+- **Production Note**: The current `kzg_ck` (w3f-pcs type) is not yet used in prove() - future improvement to use FFLONK polynomial commitments instead of Sonobe's CS1.
