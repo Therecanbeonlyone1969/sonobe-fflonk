@@ -26,6 +26,11 @@ num-integer = { workspace = true }
 sha3 = { workspace = true }
 log = { workspace = true }
 
+# FFLONK proof system - used as alternative decider for reduced memory usage
+# Reference: https://eprint.iacr.org/2021/1167
+# Note: Using forked version with arkworks git version patches for Sonobe compatibility
+w3f-pcs = { git = "https://github.com/Therecanbeonlyone1969/fflonk", branch = "main", features = ["std"] }
+
 [dev-dependencies]
 ark-pallas = { workspace = true, features = ["r1cs"] }
 ark-vesta = { workspace = true, features = ["r1cs"] }
