@@ -1,0 +1,62 @@
+# FFLONK Decider Integration - Task Tracker
+
+## Project Overview
+Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethereum EVM) decider in Sonobe, reducing VK generation memory requirements from ~400GB to ~100-150GB.
+
+---
+
+## Phase 1: Foundation (Human Gate)
+> **Status**: COMPLETE
+
+- [x] Set up Agile SDLC structure
+- [x] Establish Project Mode (PoC vs Prod) → **Prod-Oriented PoC**
+- [x] Define Tech Stack → **w3f/fflonk + arkworks**
+- [x] Create PRD.md
+- [x] Create CBOM.md (Crypto Bill of Materials)
+- [x] Create THREAT_MODEL.md
+- [ ] Create SYSTEM_ARCHITECTURE.md
+
+---
+
+## Phase 2: Sprint Planning
+> **Status**: NOT STARTED
+
+### Sprint 1: FFLONK Crate Integration
+- [ ] Add `fflonk` dependency (w3f/fflonk or ZKsync)
+- [ ] Verify arkworks compatibility
+- [ ] Create minimal test circuit
+- [ ] Benchmark memory usage
+
+### Sprint 2: Decider Implementation
+- [ ] Implement `preprocess()` - Universal SRS loading
+- [ ] Implement `prove()` - Witness conversion and proof generation
+- [ ] Implement `verify()` - FFLONK + KZG verification
+- [ ] Write unit tests (TDD: Red-Green-Refactor)
+
+### Sprint 3: Solidity Verifier
+- [ ] Create FFLONK verifier template
+- [ ] Generate Solidity contract
+- [ ] Verify on-chain compatibility
+
+### Sprint 4: Integration & Benchmarks
+- [ ] Integrate with zk-proof-of-reserves circuit
+- [ ] Memory benchmarks vs Groth16
+- [ ] Performance benchmarks
+- [ ] End-to-end testing
+
+---
+
+## Phase 3: Verification & Audit
+> **Status**: NOT STARTED
+
+- [ ] Security Audit (Crypto Auditor)
+- [ ] CBOM Validation
+- [ ] Walking Code Demo
+- [ ] Walkthrough Artifact
+
+---
+
+## Notes
+- **Related Project**: `zk-proof-of-reserves`
+- **Upstream**: `privacy-scaling-explorations/sonobe`
+- **Branch**: `feat/fflonk-decider`
