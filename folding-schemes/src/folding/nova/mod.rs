@@ -54,6 +54,8 @@ pub mod decider_circuits;
 // onchain decider
 pub mod decider_eth;
 pub mod decider_eth_circuit;
+// FFLONK-based onchain decider (experimental)
+pub mod decider_fflonk_eth;
 
 use super::{
     circuits::{cyclefold::CycleFoldCircuit, CF2},
