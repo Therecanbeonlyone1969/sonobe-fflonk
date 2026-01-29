@@ -14,7 +14,7 @@ Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethere
 - [x] Create PRD.md
 - [x] Create CBOM.md (Crypto Bill of Materials)
 - [x] Create THREAT_MODEL.md
-- [ ] Create SYSTEM_ARCHITECTURE.md
+- [x] Create SYSTEM_ARCHITECTURE.md
 
 ---
 
