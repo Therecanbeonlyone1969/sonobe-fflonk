@@ -10,10 +10,12 @@ pub const GPL3_SDPX_IDENTIFIER: &str = "// SPDX-License-Identifier: GPL-3.0";
 pub const MIT_SDPX_IDENTIFIER: &str = "// SPDX-License-Identifier: MIT";
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 
+pub mod fflonk;
 pub mod g16;
 pub mod kzg;
 pub mod nova_cyclefold;
 
+pub use fflonk::FflonkVerifierKey;
 pub use g16::Groth16VerifierKey;
 pub use kzg::KZG10VerifierKey;
 pub use nova_cyclefold::{get_decider_template_for_cyclefold_decider, NovaCycleFoldVerifierKey};

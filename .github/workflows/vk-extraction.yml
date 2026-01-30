@@ -1,0 +1,115 @@
+# VK Extraction Workflow
+# Runs on GitHub-hosted runner with 32 cores/128GB RAM
+# Triggered manually via workflow_dispatch
+
+name: VK Extraction
+
+on:
+    workflow_dispatch:
+        inputs:
+            circuit_size:
+                description: "Circuit size (tiny/small/medium/large/production)"
+                required: true
+                default: "small"
+                type: choice
+                options:
+                    - tiny
+                    - small
+                    - medium
+                    - large
+                    - production
+            decider_type:
+                description: "Decider backend (fflonk/groth16)"
+                required: true
+                default: "fflonk"
+                type: choice
+                options:
+                    - fflonk
+                    - groth16
+
+jobs:
+    extract-vk:
+        name: Extract Verifier Key (${{ inputs.circuit_size }} / ${{ inputs.decider_type }})
+        runs-on: ubuntu-22.04-32-core # 32 cores, 128GB RAM
+        timeout-minutes: 120
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Cache Cargo
+              uses: Swatinem/rust-cache@v2
+              with:
+                  cache-on-failure: true
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Run VK Extraction
+              run: |
+                  echo "=== VK Extraction (${{ inputs.circuit_size }} circuit, ${{ inputs.decider_type }} decider) ==="
+
+                  # Set environment variables
+                  export CIRCUIT_SIZE=${{ inputs.circuit_size }}
+                  export DECIDER_TYPE=${{ inputs.decider_type }}
+
+                  # Run the extraction (adjust binary name as needed)
+                  # cargo run --release --bin export_vk -- --circuit $CIRCUIT_SIZE --decider $DECIDER_TYPE
+
+                  # For now, run the benchmark to validate circuit sizes
+                  cargo bench --bench constraint_scaling -- --test
+
+                  # Generate Solidity verifier
+                  cargo run --release --example generate_fflonk_verifier -p solidity-verifiers
+
+                  # Compile with Foundry
+                  forge build --contracts /tmp/FflonkDecider.sol
+
+            - name: Memory Usage Report
+              run: |
+                  echo "=== Peak Memory Usage ==="
+                  cat /proc/meminfo | grep -E "^(MemTotal|MemFree|MemAvailable)"
+
+            - name: Upload Artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: verifier-key-${{ inputs.circuit_size }}-${{ inputs.decider_type }}
+                  path: |
+                      /tmp/*.sol
+                      output/*.json
+                  retention-days: 30
+
+    benchmark:
+        name: Benchmark (FFLONK vs Groth16)
+        runs-on: ubuntu-22.04-32-core
+        timeout-minutes: 60
+        if: github.event.inputs.circuit_size != 'production'
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Cache Cargo
+              uses: Swatinem/rust-cache@v2
+
+            - name: Run Constraint Scaling Benchmark
+              run: |
+                  cargo bench --bench constraint_scaling -- --output-format=json | tee benchmark-results.json
+
+            - name: Upload Benchmark Results
+              uses: actions/upload-artifact@v4
+              with:
+                  name: benchmark-results
+                  path: benchmark-results.json

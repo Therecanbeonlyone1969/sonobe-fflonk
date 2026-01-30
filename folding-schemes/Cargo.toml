@@ -84,3 +84,11 @@ path = "../examples/multi_inputs.rs"
 [[example]]
 name = "external_inputs"
 path = "../examples/external_inputs.rs"
+
+[[bench]]
+name = "constraint_scaling"
+harness = false
+
+[[bench]]
+name = "decider_comparison"
+harness = false

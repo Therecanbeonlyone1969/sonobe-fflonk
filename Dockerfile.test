@@ -8,7 +8,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     libssl-dev \
+    curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Foundry for Solidity compilation tests (Sprint 3)
+RUN curl -L https://foundry.paradigm.xyz | bash && \
+    /root/.foundry/bin/foundryup
+ENV PATH="/root/.foundry/bin:${PATH}"
 
 WORKDIR /app
 

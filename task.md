@@ -38,16 +38,24 @@ Integrate FFLONK as an alternative final proof system for Nova's onchain (Ethere
 - [x] **Law 9**: Executable demo (`examples/demo_sprint1.rs` covers KZG flow) ✓
 - [x] **Law 9**: Walkthrough artifact update ✓
 
-### Sprint 3: Solidity Verifier
-- [ ] Create FFLONK verifier template
-- [ ] Generate Solidity contract
-- [ ] Verify on-chain compatibility
+### Sprint 3: Solidity Verifier [x]
+- [x] Upgrade `prove()` with `Fflonk::combine()` polynomial aggregation ✓
+- [x] Create FFLONK Solidity template (`fflonk_decider.askama.sol`) ✓
+- [x] Create `FflonkVerifierKey` Rust generator ✓
+- [x] Add Foundry to Dockerfile for Solidity compilation tests ✓
+- [x] Verify generated contract compiles ✓
+- [x] **Law 8**: Executable demo (`examples/demo_sprint3.rs`) ✓
+- [x] **Law 9**: Walkthrough artifact update ✓
+- [x] **Law 19**: Compliance matrix added to sprint_3_plan.md ✓
 
-### Sprint 4: Integration & Benchmarks
+### Sprint 4: Benchmark Circuits & GitHub Runner [/]
+- [x] Create `BenchCircuit` with configurable constraints (Tiny/Small/Medium/Large) ✓
+- [x] Add `bench_circuits.rs` module with tests ✓
+- [x] Create `constraint_scaling.rs` Criterion benchmark ✓
+- [x] Create `vk-extraction.yml` GitHub Actions workflow (32-core/128GB runner) ✓
 - [ ] Integrate with zk-proof-of-reserves circuit
 - [ ] Memory benchmarks vs Groth16
-- [ ] Performance benchmarks
-- [ ] End-to-end testing
+- [ ] End-to-end testing on GitHub runner
 
 ---
 

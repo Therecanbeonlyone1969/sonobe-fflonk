@@ -30,6 +30,15 @@ pub mod folding;
 pub mod frontend;
 pub mod transcript;
 pub mod utils;
+pub mod bench_circuits;
+#[cfg(test)]
+pub mod memory_measurement;
+#[cfg(test)]
+pub mod decider_comparison;
+#[cfg(test)]
+pub mod vk_extraction_memory;
+#[cfg(test)]
+pub mod full_vk_generation_memory;
 
 #[derive(Debug, Error)]
 pub enum Error {

@@ -43,7 +43,19 @@
 | Component | Type | Status | Notes |
 |-----------|------|--------|-------|
 | KZG SRS | Powers of Tau | ✅ Required | Must use audited ceremony |
-| FFLONK SRS | Universal | 🆕 Required | Same as KZG, shared SRS |
+| FFLONK SRS | Universal | ✅ Shared | Same as KZG, universal per-curve |
+
+### 6. FFLONK Polynomial Aggregation (Sprint 3)
+
+| Primitive | Algorithm | Parameters | Purpose |
+|-----------|-----------|------------|---------|
+| Combine | `Fflonk::combine(t, fs)` | t=2 | Aggregates W,E into g(X) |
+| Opening Roots | `Fflonk::roots(t, z)` | t=2 | Computes t-th roots for batch open |
+| Batch Verify | KZG multi-point | t points | Single pairing for t openings |
+
+**Formula**: `g(X) = W(X^t) + E(X^t)·X` where t=2 for Nova witness (W, E)
+
+**Security Assumption**: FFLONK aggregation preserves KZG binding under discrete log hardness on BN254.
 
 ---
 
