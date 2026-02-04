@@ -34,6 +34,23 @@ use w3f_pcs::fflonk::Fflonk;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::DenseUVPolynomial;
 
+/// Load a pre-computed URS from a file.
+/// 
+/// This reduces memory requirements from ~1TB (generation) to ~3GB (loading).
+/// The URS file should be created from a trusted ceremony (e.g., Hermez Powers of Tau)
+/// using the `ptau-to-urs` converter.
+fn load_urs_from_file(path: &std::path::Path) -> std::result::Result<URS<ark_bn254::Bn254>, Error> {
+    use std::fs::File;
+    use std::io::BufReader;
+    
+    let file = File::open(path)
+        .map_err(|e| Error::Other(format!("Failed to open URS file {:?}: {}", path, e)))?;
+    let reader = BufReader::new(file);
+    
+    URS::<ark_bn254::Bn254>::deserialize_compressed(reader)
+        .map_err(|e| Error::Other(format!("Failed to deserialize URS: {:?}", e)))
+}
+
 /// FFLONK Proof structure with real KZG types
 /// 
 /// Uses FFLONK polynomial aggregation: combines W and E polynomials into
@@ -185,11 +202,30 @@ where
             format!("~{} MB", ((max_degree + 1) * 128) / (1024 * 1024)));
         eprintln!("╚══════════════════════════════════════════════════════════════╝");
         
-        // 5. Generate KZG SRS (Universal Reference String)
+        // 5. Load or Generate KZG SRS (Universal Reference String)
         // This is the key difference from Groth16: universal setup, not circuit-specific
         let n1 = max_degree + 1; // G1 powers needed
         let n2 = 2; // G2: only need g2 and tau*g2 for verification
-        let urs = URS::<ark_bn254::Bn254>::generate(n1, n2, &mut rng);
+        
+        // Check for pre-computed URS file (reduces memory from ~1TB to ~3GB)
+        let urs = if let Ok(path) = std::env::var("FFLONK_URS_PATH") {
+            eprintln!("╔══════════════════════════════════════════════════════════════╗");
+            eprintln!("║ Loading pre-computed URS from file                           ║");
+            eprintln!("╠══════════════════════════════════════════════════════════════╣");
+            eprintln!("║  Path: {}...", &path[..path.len().min(50)]);
+            eprintln!("║  Memory savings: ~1TB → ~3GB                                 ║");
+            eprintln!("╚══════════════════════════════════════════════════════════════╝");
+            
+            load_urs_from_file(std::path::Path::new(&path))?
+        } else {
+            eprintln!("╔══════════════════════════════════════════════════════════════╗");
+            eprintln!("║ WARNING: Generating URS in-memory (HIGH MEMORY USAGE!)       ║");
+            eprintln!("╠══════════════════════════════════════════════════════════════╣");
+            eprintln!("║  Required memory: ~1TB for 9M constraint circuit             ║");
+            eprintln!("║  Set FFLONK_URS_PATH to load pre-computed URS instead        ║");
+            eprintln!("╚══════════════════════════════════════════════════════════════╝");
+            URS::<ark_bn254::Bn254>::generate(n1, n2, &mut rng)
+        };
         
         // 6. Extract committer key and raw verifier key
         let kzg_ck = urs.ck();
