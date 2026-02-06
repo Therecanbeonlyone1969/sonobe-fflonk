@@ -57,6 +57,30 @@ pub mod decider_eth_circuit;
 // FFLONK-based onchain decider (experimental)
 pub mod decider_fflonk_eth;
 
+/// Helper function to log current memory usage (Linux/Unix only via /proc/self/statm)
+/// Logs: VmRSS (resident set size - actual RAM used)
+#[cfg(feature = "debug-timing")]
+fn log_memory_usage(prefix: &str) {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
+            let parts: Vec<&str> = statm.split_whitespace().collect();
+            if parts.len() >= 2 {
+                // statm reports pages, typically 4KB each
+                let page_size_kb = 4;
+                let rss_pages: usize = parts[1].parse().unwrap_or(0);
+                let rss_gb = (rss_pages * page_size_kb) as f64 / (1024.0 * 1024.0);
+                eprintln!("{} Memory: {:.2} GB RSS", prefix, rss_gb);
+            }
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        // On non-Linux, just print a placeholder
+        eprintln!("{} Memory: (not available on this OS)", prefix);
+    }
+}
+
 use super::{
     circuits::{cyclefold::CycleFoldCircuit, CF2},
     traits::{CommittedInstanceOps, Inputize, WitnessOps},
@@ -565,10 +589,41 @@ where
         mut rng: impl RngCore,
         prep_param: &Self::PreprocessorParam,
     ) -> Result<(Self::ProverParam, Self::VerifierParam), Error> {
+        #[cfg(feature = "debug-timing")]
+        let total_start = std::time::Instant::now();
+        
+        #[cfg(feature = "debug-timing")]
+        {
+            eprintln!("╔══════════════════════════════════════════════════════════════╗");
+            eprintln!("║  NOVA::preprocess - Instrumented Build                       ║");
+            eprintln!("╚══════════════════════════════════════════════════════════════╝");
+            eprintln!("[NOVA::preprocess] Phase A: R1CS Generation...");
+            log_memory_usage("[NOVA::preprocess] Initial");
+        }
+        
+        #[cfg(feature = "debug-timing")]
+        let phase_a_start = std::time::Instant::now();
+        
         let (r1cs, cf_r1cs) =
             get_r1cs::<C1, C2, FC>(&prep_param.poseidon_config, prep_param.F.clone())?;
 
+        #[cfg(feature = "debug-timing")]
+        {
+            eprintln!("[NOVA::preprocess] ✅ Phase A complete in {:.1}s",
+                phase_a_start.elapsed().as_secs_f64());
+            log_memory_usage("[NOVA::preprocess] After Phase A");
+        }
+
         // if cs params exist, use them, if not, generate new ones
+        #[cfg(feature = "debug-timing")]
+        {
+            let cs1_size = max(r1cs.n_constraints(), r1cs.n_witnesses());
+            eprintln!("[NOVA::preprocess] Phase B: CS1 Setup (n={})...", cs1_size);
+        }
+        
+        #[cfg(feature = "debug-timing")]
+        let phase_b_start = std::time::Instant::now();
+        
         let (cs_pp, cs_vp) = match (&prep_param.cs_pp, &prep_param.cs_vp) {
             (Some(cs_pp), Some(cs_vp)) => (cs_pp.clone(), cs_vp.clone()),
             _ => CS1::setup(
@@ -580,6 +635,23 @@ where
                 max(r1cs.n_constraints(), r1cs.n_witnesses()),
             )?,
         };
+        
+        #[cfg(feature = "debug-timing")]
+        {
+            eprintln!("[NOVA::preprocess] ✅ Phase B complete in {:.1}s",
+                phase_b_start.elapsed().as_secs_f64());
+            log_memory_usage("[NOVA::preprocess] After Phase B");
+        }
+        
+        #[cfg(feature = "debug-timing")]
+        {
+            let cs2_size = max(cf_r1cs.n_constraints(), cf_r1cs.n_witnesses());
+            eprintln!("[NOVA::preprocess] Phase C: CS2/CycleFold Setup (n={})...", cs2_size);
+        }
+        
+        #[cfg(feature = "debug-timing")]
+        let phase_c_start = std::time::Instant::now();
+        
         let (cf_cs_pp, cf_cs_vp) = match (&prep_param.cf_cs_pp, &prep_param.cf_cs_vp) {
             (Some(cf_cs_pp), Some(cf_cs_vp)) => (cf_cs_pp.clone(), cf_cs_vp.clone()),
             _ => CS2::setup(
@@ -591,6 +663,13 @@ where
                 max(cf_r1cs.n_constraints(), cf_r1cs.n_witnesses()),
             )?,
         };
+
+        #[cfg(feature = "debug-timing")]
+        {
+            eprintln!("[NOVA::preprocess] ✅ Phase C complete in {:.1}s",
+                phase_c_start.elapsed().as_secs_f64());
+            log_memory_usage("[NOVA::preprocess] After Phase C");
+        }
 
         let prover_params = ProverParams::<C1, C2, CS1, CS2, H> {
             poseidon_config: prep_param.poseidon_config.clone(),
@@ -604,6 +683,15 @@ where
             cs_vp,
             cf_cs_vp,
         };
+
+        #[cfg(feature = "debug-timing")]
+        {
+            eprintln!("╔══════════════════════════════════════════════════════════════╗");
+            eprintln!("║  NOVA::preprocess COMPLETE - {:.1}s total                     ║",
+                total_start.elapsed().as_secs_f64());
+            eprintln!("╚══════════════════════════════════════════════════════════════╝");
+            log_memory_usage("[NOVA::preprocess] Final");
+        }
 
         Ok((prover_params, verifier_params))
     }
@@ -999,12 +1087,48 @@ where
 pub fn get_r1cs_from_cs<F: PrimeField>(
     circuit: impl ConstraintSynthesizer<F>,
 ) -> Result<R1CS<F>, Error> {
+    #[cfg(feature = "debug-timing")]
+    let step_start = std::time::Instant::now();
+    
+    #[cfg(feature = "debug-timing")]
+    eprintln!("[R1CS] Creating constraint system...");
+    
     let cs = ConstraintSystem::<F>::new_ref();
     cs.set_mode(SynthesisMode::Setup);
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        eprintln!("[R1CS] Generating constraints...");
+        log_memory_usage("[R1CS] Before generate_constraints");
+    }
+    
     circuit.generate_constraints(cs.clone())?;
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        let num_constraints = cs.num_constraints();
+        let num_witness = cs.num_witness_variables();
+        let num_instance = cs.num_instance_variables();
+        eprintln!("[R1CS] Constraints generated: {} constraints, {} witness vars, {} instance vars, {:.1}s",
+            num_constraints, num_witness, num_instance, step_start.elapsed().as_secs_f64());
+        log_memory_usage("[R1CS] After generate_constraints");
+    }
+    
     cs.finalize();
+    
+    #[cfg(feature = "debug-timing")]
+    eprintln!("[R1CS] Extracting R1CS matrices...");
+    
     let cs = cs.into_inner().ok_or(Error::NoInnerConstraintSystem)?;
     let r1cs = extract_r1cs::<F>(&cs)?;
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        eprintln!("[R1CS] Extraction complete: {} constraints, {} witnesses, {:.1}s total",
+            r1cs.n_constraints(), r1cs.n_witnesses(), step_start.elapsed().as_secs_f64());
+        log_memory_usage("[R1CS] After extract_r1cs");
+    }
+    
     Ok(r1cs)
 }
 
@@ -1020,10 +1144,36 @@ where
     FC: FCircuit<C1::ScalarField>,
     C1: Curve<BaseField = C2::ScalarField, ScalarField = C2::BaseField>,
 {
+    #[cfg(feature = "debug-timing")]
+    eprintln!("[NOVA::get_r1cs] Creating AugmentedFCircuit...");
+    
     let augmented_F_circuit = AugmentedFCircuit::<C1, C2, FC>::empty(poseidon_config, F_circuit);
     let cf_circuit = CycleFoldCircuit::<_, NovaCycleFoldConfig<C1>>::default();
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        eprintln!("[NOVA::get_r1cs] Synthesizing main R1CS (AugmentedFCircuit)...");
+        log_memory_usage("[NOVA::get_r1cs] Before main R1CS");
+    }
+    
     let r1cs = get_r1cs_from_cs::<C1::ScalarField>(augmented_F_circuit)?;
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        eprintln!("[NOVA::get_r1cs] Main R1CS complete: {} constraints, {} witnesses",
+            r1cs.n_constraints(), r1cs.n_witnesses());
+        eprintln!("[NOVA::get_r1cs] Synthesizing CycleFold R1CS...");
+    }
+    
     let cf_r1cs = get_r1cs_from_cs::<C2::ScalarField>(cf_circuit)?;
+    
+    #[cfg(feature = "debug-timing")]
+    {
+        eprintln!("[NOVA::get_r1cs] CycleFold R1CS complete: {} constraints, {} witnesses",
+            cf_r1cs.n_constraints(), cf_r1cs.n_witnesses());
+        log_memory_usage("[NOVA::get_r1cs] After all R1CS synthesis");
+    }
+    
     Ok((r1cs, cf_r1cs))
 }
 
